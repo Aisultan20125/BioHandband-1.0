@@ -22,3 +22,33 @@ Aisultan architected the end-to-end system flow and developed the foundational s
 
 ## Future Trajectory
 The current prototype demonstrates that decentralized neuro-monitoring is not only possible but scalable. **Consequently**, Bio-Headband 1.0 serves as a foundational model for the future of personalized, AI-driven healthcare, proving that precision diagnostics can be achieved through open-source engineering.
+
+
+# 🧠 Bio-Headband 1.0 & BioHeadband AI
+**Advanced Neurotechnology for Automated Sleep Architecture Analysis**
+
+**Lead Software & AI Developer:** Aisultan Sarsen  
+**Domain:** Computational Neuroscience & Embedded Systems  
+
+---
+
+## 📌 Project Vision and Mission
+Bio-Headband 1.0 is an advanced neurotechnology framework developed to quantify sleep architecture and optimize cognitive recovery. Unlike standard wearables that offer superficial data, this system synthesizes high-fidelity single-channel EEG and HRV signals with Large Language Models (LLMs). The objective is to transform raw physiological noise into actionable intelligence, providing a clinical-grade diagnostic tool in a portable, open-source format.
+
+## ⚠️ The Problem and Our Innovation
+Most consumer sleep trackers rely on basic motion sensors, which frequently misinterpret physical movement as actual sleep-stage transitions. **Paradoxically**, while the global demand for neuro-optimization is at an all-time high, the accuracy of accessible data remains inadequate for serious research. 
+
+Bio-Headband 1.0 addresses this discrepancy by capturing real-time neuro-physiological signals under a strictly adhered **Zero-EMF** paradigm. By implementing digital Butterworth filters, the system isolates critical brainwave frequencies from environmental interference, ensuring absolute data integrity.
+
+---
+
+## 🏗️ System Architecture & Repository Structure
+
+```text
+Bio-Headband-1.0/
+├── docs/                     # Comprehensive research whitepapers and clinical theory
+├── src/                      # Source Code (Software & AI Pipeline)
+│   ├── firmware/             # C++ DSP algorithms & hardware interfacing (Arduino)
+│   └── ai_pipeline/          # Python asynchronous backend & OpenAI integration
+├── data/                     # Sample CSV telemetry logs for system validation
+└── hardware/                 # Circuit schematics and component specifications
