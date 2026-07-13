@@ -1,0 +1,177 @@
+// ============================================================
+//  Bio-Headband 1.0  —  Arduino Nano / Pro Mini
+//  Display : SSD1306 128x64 OLED via U8g2
+//  Sensors : BiTronicsLab Pulse PCB | EEG analog | MPU-6050
+// ============================================================
+
+#include <Arduino.h>
+#include <U8g2lib.h>
+#include <Wire.h>
+
+// ── Display ─────────────────────────────────────────────────
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
+
+// ── Pins ────────────────────────────────────────────────────
+#define PULSE_PIN  A0
+#define EEG_PIN    A1
+#define MPU_ADDR   0x68
+
+// ── Sleep Stage Table (PROGMEM) ──────────────────────────────
+const char s0[] PROGMEM = "ACTIVE";
+const char s1[] PROGMEM = "SLEEP (LIGHT)";
+const char s2[] PROGMEM = "SLEEP (DEEP)";
+const char s3[] PROGMEM = "SLEEP (REM)";
+const char* const STAGE_TBL[] PROGMEM = { s0, s1, s2, s3 };
+
+// ── Pulse State ──────────────────────────────────────────────
+#define PULSE_THRESH  512
+#define BPM_SAMPLES   8
+
+unsigned long beatIntervals[BPM_SAMPLES];
+uint8_t       beatIdx   = 0;
+unsigned long lastBeat  = 0;
+bool          aboveThresh = false;
+bool          newBeat   = false;
+int           bpm       = 0;
+
+// ── Sensor Values ────────────────────────────────────────────
+int eegValue  = 0;
+int moveValue = 0;
+
+// ── MPU-6050 ─────────────────────────────────────────────────
+int16_t ax, ay, az;
+
+// ── Sleep Stage ──────────────────────────────────────────────
+uint8_t sleepStage = 0;
+char    stageBuf[16];
+
+// ── Timing ───────────────────────────────────────────────────
+unsigned long lastSampleTime  = 0;
+unsigned long lastDisplayTime = 0;
+unsigned long lastStageTime   = 0;
+#define SAMPLE_MS   10
+#define DISPLAY_MS  200
+#define STAGE_MS    5000
+
+// ── MPU-6050 ─────────────────────────────────────────────────
+void mpuInit() {
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x6B);
+  Wire.write(0x00);
+  Wire.endTransmission(true);
+}
+
+void mpuRead() {
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x3B);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU_ADDR, 6, true);
+  ax = (Wire.read() << 8) | Wire.read();
+  ay = (Wire.read() << 8) | Wire.read();
+  az = (Wire.read() << 8) | Wire.read();
+}
+
+// ── Pulse / BPM ──────────────────────────────────────────────
+void processPulse() {
+  int raw = analogRead(PULSE_PIN);
+
+  if (raw > PULSE_THRESH && !aboveThresh) {
+    aboveThresh = true;
+    unsigned long now = millis();
+    unsigned long interval = now - lastBeat;
+    if (interval > 300 && interval < 2000) {
+      beatIntervals[beatIdx % BPM_SAMPLES] = interval;
+      beatIdx++;
+      newBeat = true;
+    }
+    lastBeat = now;
+  } else if (raw <= PULSE_THRESH) {
+    aboveThresh = false;
+  }
+}
+
+int calcBPM() {
+  uint8_t count = min((int)beatIdx, BPM_SAMPLES);
+  if (count < 2) return 0;
+  unsigned long sum = 0;
+  for (uint8_t i = 0; i < count; i++) sum += beatIntervals[i];
+  return (int)(60000UL / (sum / count));
+}
+
+// ── Sleep Stage Classifier ───────────────────────────────────
+uint8_t classifyStage(int bpm_, int eeg_, int move_) {
+  if (move_ > 200)                return 0; // ACTIVE
+  if (eeg_  > 600)                return 3; // REM
+  if (bpm_  < 55 && eeg_ < 300)  return 2; // DEEP
+  return 1;                                 // LIGHT
+}
+
+// ── Display ──────────────────────────────────────────────────
+void drawDisplay() {
+  strcpy_P(stageBuf, (char*)pgm_read_ptr(&(STAGE_TBL[sleepStage])));
+
+  char buf[24];
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tf);
+
+  u8g2.drawStr(0, 10, "BIO-HEADBAND 1.0");
+  u8g2.drawHLine(0, 12, 128);
+
+  snprintf(buf, sizeof(buf), "PULSE : %3d BPM", bpm);
+  u8g2.drawStr(0, 24, buf);
+
+  snprintf(buf, sizeof(buf), "EEG   : %4d", eegValue);
+  u8g2.drawStr(0, 34, buf);
+
+  snprintf(buf, sizeof(buf), "MOVE  : %4d", moveValue);
+  u8g2.drawStr(0, 44, buf);
+
+  u8g2.drawHLine(0, 50, 128);
+  u8g2.drawStr(0, 62, stageBuf);
+
+  u8g2.sendBuffer();
+}
+
+// ── Setup ────────────────────────────────────────────────────
+void setup() {
+  Wire.begin();
+  mpuInit();
+
+  u8g2.begin();
+  u8g2.setContrast(200);
+
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.drawStr(20, 30, "BIO-HEADBAND");
+  u8g2.drawStr(32, 44, "Loading...");
+  u8g2.sendBuffer();
+  delay(1500);
+}
+
+// ── Loop ─────────────────────────────────────────────────────
+void loop() {
+  unsigned long now = millis();
+
+  if (now - lastSampleTime >= SAMPLE_MS) {
+    lastSampleTime = now;
+
+    processPulse();
+    if (newBeat) { bpm = calcBPM(); newBeat = false; }
+
+    eegValue = analogRead(EEG_PIN);
+
+    mpuRead();
+    long mag = (long)ax*ax + (long)ay*ay + (long)az*az;
+    moveValue = constrain((int)(sqrt((double)mag) / 32) - 512, 0, 1023);
+  }
+
+  if (now - lastStageTime >= STAGE_MS) {
+    lastStageTime = now;
+    sleepStage = classifyStage(bpm, eegValue, moveValue);
+  }
+
+  if (now - lastDisplayTime >= DISPLAY_MS) {
+    lastDisplayTime = now;
+    drawDisplay();
+  }
+}
